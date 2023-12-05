@@ -14,7 +14,6 @@ files = [file for file in files if file.endswith('.txt')]
 
 log = '.book-cleaner-log'
 pickle_path = Path(log).resolve()
-print(pickle_path)
 ignored = []
 if os.path.exists(pickle_path):
     file = open(pickle_path, 'rb')

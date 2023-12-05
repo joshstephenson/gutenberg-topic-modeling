@@ -77,7 +77,7 @@ TITLE_RE = r"^Title: "
 AUTHOR_RE = r"^Author: "
 START_RE = r'\*+\s*START OF'
 END_RE = r'\*+\s*END OF'
-PARSE_MWES = False
+PARSE_MWES = True
 SUMMARIZE = False
 TARGET_WORDCOUNT = 1000
 
@@ -91,6 +91,7 @@ class MethodStep(IntEnum):
     onlynouns = 3
     lemmatize = 4
     bigrams = 5
+    mwes = 6
 
 METHOD = MethodStep.basic
 class Book:
@@ -125,15 +126,10 @@ class Book:
     def process(self, cleaned):
         def is_word(word):
             word = word.lower()
-            return word.isalpha() and word not in stop
+            return len(word) > 1 and word.isalpha() and word not in stop
 
-        def is_noun(word):
-            word = word.lower()
-            if not word.isalpha() or word in stop:
-                return False
-            tag = pos_tag([word])
-            pos = tag[0][1]
-            return pos.startswith('NN') and pos != 'NNP' # no proper nouns
+        def is_noun(pos):
+            return pos.startswith('NN') and pos not in ['NNP', 'NNPS'] # no proper nouns
 
         def _tokenize(body, trim = False, only_nouns = False):
             if trim:
@@ -143,8 +139,9 @@ class Book:
                 words = []
                 for sent in sentences:
                     if only_nouns:
-                        # don't lowercase nouns, we need case for proper noun detection
-                        w = [word for word in list(tokenize(sent, lower = False)) if is_noun(word)]
+                        tokenized = list(tokenize(sent, lower = False))
+                        tagged = pos_tag(tokenized)
+                        w = [word.lower() for word, pos in tagged if pos.startswith('NN') and is_noun(pos) and is_word(word)]
                     else:
                         w = list(tokenize(sent, lower = False))
                     count += len(w)
@@ -165,19 +162,28 @@ class Book:
             words = remove_all_but_nouns(body)
             return [lemmatizer.lemmatize(word) for word in words]
 
+        def mwes(body):
+            sentences = sent_tokenize(body.replace('_', '').replace('\n', ''))
+            tokenized = [mwe_tokenizer.tokenize(list(tokenize(sent, lower = False))) for sent in sentences]
+            tagged = [pos_tag(sent) for sent in tokenized]
+            sentences = [[lemmatizer.lemmatize(word.lower()) for word, pos in sent if is_noun(pos) and is_word(word)] for sent in tagged]
+            sent = list(flatten(sentences))
+            return sent
+
         def bigrams(body):
             # Add bigrams
             sentences = sent_tokenize(body.replace('_', '').replace('\n', ''))
-            sentences = [list(tokenize(sent, lower = False)) for sent in sentences]
-            sentences = [[lemmatizer.lemmatize(word) for word in sent if is_noun(word)] for sent in sentences]
-            model = Phrases(sentences, min_count = 3, threshold = 2)
+            tokenized = [list(tokenize(sent, lower = False)) for sent in sentences]
+            tagged = [pos_tag(sent) for sent in tokenized]
+            sentences = [[lemmatizer.lemmatize(word.lower()) for word, pos in sent if is_noun(pos) and is_word(word)] for sent in tagged]
+            model = Phrases(sentences, min_count = 3, threshold = 10)
             tokens = [preprocess_string(" ".join(sent), []) for sent in sentences]
             bigrams = model[tokens]
             rtn = []
             for b in bigrams:
                 for w in b:
                     if '_' in w:
-                        rtn.append(w)
+                        rtn.append(w.replace('_', ' '))
             return rtn
 
         self.parse_book(cleaned)
@@ -186,7 +192,6 @@ class Book:
             print(f'Parsed book: {self.title} by {self.author} w/ {len(self.body_lines)} lines of text.')
 
             self.lemma = _tokenize(self.body, METHOD >= MethodStep.trimwords)
-            old_lemma = len(self.lemma)
             match METHOD:
                 case MethodStep.basic:
                     pass
@@ -195,16 +200,14 @@ class Book:
                     self.lemma = _tokenize(self.body, True)
                 case MethodStep.stopwords:
                     self.lemma = _remove_stopwords(self.lemma)
-                    assert old_lemma != len(self.lemma)
                 case MethodStep.onlynouns:
                     self.lemma = remove_all_but_nouns(self.body)
-                    assert old_lemma != len(self.lemma)
                 case MethodStep.lemmatize:
                     self.lemma = lemmatize(self.body)
-                    assert old_lemma != len(self.lemma)
                 case MethodStep.bigrams:
                     self.lemma = bigrams(self.body)
-                    assert old_lemma != len(self.lemma)
+                case MethodStep.mwes:
+                    self.lemma = mwes(self.body)
 
         return self
 
@@ -253,14 +256,22 @@ class Book:
         self.body = ' '.join(self.body_lines)
 
 FIND_COHERENCE = False
-NUM_TOPICS = 20
+NUM_TOPICS = 32
 if __name__ == '__main__':
     def compute_coherence_values(dictionary, corpus, texts, nums):
         coherence_values = []
         model_list = []
         for num_topics in nums:
             print(f'num_topics: {num_topics}')
-            model = gensim.models.LdaModel(corpus=corpus, id2word=id2word, num_topics=num_topics)
+            model = LdaModel(corpus = corpus,
+                id2word = dictionary.id2token,
+                chunksize = 20,
+                alpha = 'auto',
+                eta = 'auto',
+                iterations = 50,
+                num_topics = num_topics,
+                passes = 20,
+                eval_every = None)
             model_list.append(model)
             coherencemodel = CoherenceModel(model=model, texts=texts, dictionary=dictionary, coherence='c_v')
             coherence_values.append(coherencemodel.get_coherence())
@@ -268,12 +279,20 @@ if __name__ == '__main__':
         return model_list, coherence_values
 
     def run_analysis(start = 2, limit = 41, step = 3):
-        x = list(range(start, limit, step))
-        model_list, coherence_values = compute_coherence_values(dictionary = id2word, corpus = corpus, texts = all_lemma, nums = x)
+        x = list(range(start, limit+1, step))
+        docs = [book.lemma for book in books]
+
+        dictionary = Dictionary(docs)
+        dictionary.filter_extremes(no_below = 3, no_above = 0.5)
+        corpus = [dictionary.doc2bow(doc) for doc in docs]
+        temp = dictionary[0] # prime the dictionary ???
+        id2word = dictionary.id2token
+
+        model_list, coherence_values = compute_coherence_values(dictionary = dictionary, corpus = corpus, texts = docs, nums = x)
         print(coherence_values)
         plt.figure()
         plt.plot(x, coherence_values)
-        plt.xlabel("Num Topics")
+        plt.xlabel("Number of Topics")
         plt.ylabel("Coherence score")
         plt.legend(("coherence_values"), loc='best')
         plt.savefig('coherence.png')
@@ -294,7 +313,7 @@ if __name__ == '__main__':
 
 
     if FIND_COHERENCE:
-        run_analysis(2, 41, 3)
+        run_analysis(2, 60, 2)
     else:
         docs = [book.lemma for book in books]
 
@@ -321,16 +340,19 @@ if __name__ == '__main__':
         print(filename)
         pyLDAvis.save_html(prepared, filename)
 
-        print("Making word clouds")
-        for i in range(NUM_TOPICS):
-            w = WordCloud().fit_words(dict(model.show_topic(i, 50)))
-            plt.imshow(w)
-            plt.savefig('book-wordcloud-' + method_str +'-topic-' + str(i) + '.png')
-            plt.axis("off")
+        for i in range(5):
+            print(model.get_document_topics
 
-        print(f'Finding topics for first 10 books')
-        for b in books:
-            print(b.title)
-            topics = model.get_document_topics(dictionary.doc2bow(b.lemma))
-            ids = [a for a,b in topics]
-            print(model.show_topic(ids[0]))
+#        print("Making word clouds")
+#        for i in range(NUM_TOPICS):
+#            w = WordCloud().fit_words(dict(model.show_topic(i, 50)))
+#            plt.imshow(w)
+#            plt.savefig('book-wordcloud-' + method_str +'-topic-' + str(i) + '.png')
+#            plt.axis("off")
+#
+#        print(f'Finding topics for first 10 books')
+#        for b in books:
+#            print(b.title)
+#            topics = model.get_document_topics(dictionary.doc2bow(b.lemma))
+#            ids = [a for a,b in topics]
+#            print(model.show_topic(ids[0]))

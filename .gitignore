@@ -1,0 +1,10 @@
+.DS_Store
+.book-cleaner-log
+*.docx
+*.pdf
+*.html
+*.pkl
+*.png
+test.py
+.ipynb_checkpoints/
+__pycache__/
