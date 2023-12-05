@@ -1,6 +1,7 @@
 .DS_Store
 .book-cleaner-log
 *.docx
+*.xlsx
 *.pdf
 *.html
 *.pkl
@@ -8,3 +9,5 @@
 test.py
 .ipynb_checkpoints/
 __pycache__/
+*.key
+PG/
