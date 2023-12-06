@@ -1,3 +1,12 @@
+"""
+    This script is meant to process a folder of bulk books from the Gutenberg Project.
+    It will find any text files in a folder named 'PG'. To change that folder name, change
+    the `path` variable below.
+
+    For any book that it is able to successfully parse the metadata, it will prompt the user
+    to save it. Type [ENTER] to save, type anything else to skip. Saved books will be
+    saved to `./Books`.
+"""
 #!/usr/bin/env python
 
 import subprocess

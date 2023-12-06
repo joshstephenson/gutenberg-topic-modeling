@@ -340,19 +340,9 @@ if __name__ == '__main__':
         print(filename)
         pyLDAvis.save_html(prepared, filename)
 
-        for i in range(5):
-            print(model.get_document_topics
-
 #        print("Making word clouds")
 #        for i in range(NUM_TOPICS):
 #            w = WordCloud().fit_words(dict(model.show_topic(i, 50)))
 #            plt.imshow(w)
 #            plt.savefig('book-wordcloud-' + method_str +'-topic-' + str(i) + '.png')
 #            plt.axis("off")
-#
-#        print(f'Finding topics for first 10 books')
-#        for b in books:
-#            print(b.title)
-#            topics = model.get_document_topics(dictionary.doc2bow(b.lemma))
-#            ids = [a for a,b in topics]
-#            print(model.show_topic(ids[0]))
