@@ -1,18 +1,18 @@
-"""
-    This script is meant to process a folder of bulk books from the Gutenberg Project.
-    It will find any text files in a folder named 'PG'. To change that folder name, change
-    the `path` variable below.
-
-    For any book that it is able to successfully parse the metadata, it will prompt the user
-    to save it. Type [ENTER] to save, type anything else to skip. Saved books will be
-    saved to `./Books`.
-"""
 #!/usr/bin/env python
+###############################################################################
+# This script is meant to process a folder of bulk books from the Gutenberg
+# Project. It will find any text files in a folder named 'PG'. To change that
+# folder name, change the `path` variable below.
+#
+# For any book that it is able to successfully parse the metadata, it will
+# prompt the user to save it. Type [ENTER] to save, type anything else to skip.
+# Saved books will be saved to `./Books`.
+###############################################################################
 
 import subprocess
 import readchar
 import os.path
-from gts import Book
+from book_modeler import Book
 from pathlib import Path
 import re
 import pickle
@@ -21,6 +21,9 @@ path = 'PG'
 files = [str(child.resolve()) for child in sorted(Path.iterdir(Path(path)))]
 files = [file for file in files if file.endswith('.txt')]
 
+###############################################################################
+# Saves a log of skipped books so they won't be imported again
+###############################################################################
 log = '.book-cleaner-log'
 pickle_path = Path(log).resolve()
 ignored = []
@@ -66,4 +69,4 @@ for file in files:
                 save_clean_file(book, path)
             else:
                 ignore(path)
-        os.remove(file)
+#        os.remove(file)
