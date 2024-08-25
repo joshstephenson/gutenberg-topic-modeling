@@ -3,7 +3,7 @@
 This project is an exploration of topic modeling with Latent Dirachlet Allocation for literature. 
 
 ## book_cleaner.py
-A bulk package of Gutenberg books was obtained. Each book was an obscurely named text file, so the first step was to write `book_cleaner.py` to parse the books. Each file has inconsistent headers and footers containing attributions and transcription notes that needed to be stripped out. Due to the overwhelming inconsistency, some books will be skipped and successful parsing with dump the user in `vim` to edit any remaining text they don't want included in the topic modeling. Saved books will be placed in `./Books` subdirectory.
+A bulk package of Gutenberg books was obtained. Each book was an obscurely named text file, so the first step was to write `book_cleaner.py` to parse the books. Each file has inconsistent headers and footers containing attributions and transcription notes that needed to be stripped out. Due to this overwhelming inconsistency, some books will be skipped and successful parsing with PUT the user in `vim` to edit any remaining text they don't want included in the topic modeling. Saved books will be placed in `./Books` subdirectory.
 
 ## book_modeler.py
 This file will parse books saved to `./Books`. It will tokenize the text in one of 6 ways depending on how the `METHOD` constant is set. Each of these methods is added to the previous one.
